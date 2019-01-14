@@ -19,14 +19,9 @@ import {
     ViewerOptions, DiagramServer, ActionMessage, ExportSvgAction, RequestModelAction, Action,
     ICommand, ServerStatusAction, RequestPopupModelAction, SetPopupModelAction, SModelRootSchema, SModelElementSchema
 } from 'sprotty/lib'
-import { TheiaSprottyConnector } from './theia-sprotty-connector'
+import { TheiaSprottyConnector, LSTheiaSprottyConnector } from './theia-sprotty-connector'
 import { injectable, inject, optional } from "inversify"
 import { Workspace } from '@theia/languages/lib/browser';
-
-
-export const TheiaDiagramServerProvider = Symbol('TheiaDiagramServerProvider');
-
-export type TheiaDiagramServerProvider = () => Promise<TheiaDiagramServer>;
 
 export const IRootPopupModelProvider = Symbol('IRootPopupModelProvider');
 export interface IRootPopupModelProvider {
@@ -42,12 +37,12 @@ export interface IRootPopupModelProvider {
  * services are available via the TheiaDiagramServerConnector.
  */
 @injectable()
-export class TheiaDiagramServer extends DiagramServer {
+export abstract class TheiaDiagramServer extends DiagramServer {
 
-    private connector: Promise<TheiaSprottyConnector>
+    protected connector: Promise<TheiaSprottyConnector>
     private resolveConnector: (server: TheiaSprottyConnector) => void
     protected sourceUri: string
-    protected workspace: Workspace | undefined;
+
 
     @inject(IRootPopupModelProvider)@optional() protected rootPopupModelProvider: IRootPopupModelProvider;
 
@@ -62,7 +57,6 @@ export class TheiaDiagramServer extends DiagramServer {
 
     connect(connector: TheiaSprottyConnector): void {
         this.resolveConnector(connector)
-        this.workspace = connector.workspace
     }
 
     disconnect(): void {
@@ -80,10 +74,6 @@ export class TheiaDiagramServer extends DiagramServer {
 
     getSourceUri() {
         return this.sourceUri
-    }
-
-    getWorkspace() {
-        return this.workspace
     }
 
     initialize(registry: ActionHandlerRegistry): void {
@@ -128,7 +118,7 @@ export class TheiaDiagramServer extends DiagramServer {
     }
 
     sendMessage(message: ActionMessage) {
-        this.connector.then(c => c.sendThroughLsp(message))
+        this.connector.then(c => c.sendMessage(message))
     }
 
     /**
@@ -138,5 +128,24 @@ export class TheiaDiagramServer extends DiagramServer {
         super.messageReceived(message)
     }
 }
+export const LSTheiaDiagramServerProvider = Symbol('LSTheiaDiagramServerProvider');
 
+export type LSTheiaDiagramServerProvider = () => Promise<LSTheiaDiagramServer>;
 
+@injectable()
+export class LSTheiaDiagramServer extends TheiaDiagramServer {
+    protected workspace: Workspace | undefined;
+
+    connect(connector: LSTheiaSprottyConnector): void {
+        super.connect(connector)
+        this.workspace = connector.workspace
+    }
+
+    getWorkspace() {
+        return this.workspace
+    }
+
+    getConnector(): Promise<LSTheiaSprottyConnector> {
+        return this.connector as Promise<LSTheiaSprottyConnector>
+    }
+}
